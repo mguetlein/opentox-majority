@@ -44,7 +44,7 @@ post '/:class/model/:id' do
   prediction.features << model.predictedVariables
   
   response['Content-Type'] = 'text/uri-list'
-  #task_uri = OpenTox::Task.as_task do
+  task_uri = OpenTox::Task.as_task do
      dataset.compounds.each do |compound_uri|
         prediction.compounds << compound_uri
         prediction.data[compound_uri] = [] unless prediction.data[compound_uri]
@@ -57,10 +57,10 @@ post '/:class/model/:id' do
           prediction.data[compound_uri] << {model.predictedVariables => model.mean}
         end
      end
-     puts "done"
-     return prediction.save.chomp
-  #end
-  #halt 202,task_uri
+  #   puts "done"
+     prediction.save.chomp
+  end
+  halt 202,task_uri
 end
 
 def check_classification(params)
