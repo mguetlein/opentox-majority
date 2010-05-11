@@ -145,7 +145,9 @@ get '/:class/model' do
   classification = check_classification(params)
   
   response['Content-Type'] = 'text/uri-list'
-  return Model.all(:classification => classification).collect{|m| m.uri}.join("\n")+"\n" 
+  params[:classification] = params["class"]=="class"
+  params.delete("class")
+  return Model.all(params).collect{|m| m.uri}.join("\n")+"\n" 
 end
 
 
