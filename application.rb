@@ -1,5 +1,5 @@
 require 'rubygems'
-gem 'opentox-ruby-api-wrapper', '= 1.4.4.4'
+gem 'opentox-ruby-api-wrapper', '= 1.5.6'
 require 'opentox-ruby-api-wrapper'
 
 LOGGER.progname = File.expand_path(__FILE__)
@@ -86,7 +86,7 @@ get '/:class/model/:id' do
   case accept
   when "application/rdf+xml"
     OpenTox::Model::Generic.to_rdf(model)
-  when "text/x-yaml"
+  when "application/x-yaml"
     model.to_yaml
   else
     halt 400,"header not supported "+accept.to_s
