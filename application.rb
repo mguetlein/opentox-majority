@@ -11,10 +11,10 @@ class Model
   property :created_at, DateTime
   property :classification, Boolean
   
-  property :title, String, :length => 255
+  property :title, String, :length => 255, :default => "Majority Model"
   property :mean, String, :length => 255
-  property :creator, String, :length => 255
-  property :format, String, :length => 255
+  property :creator, String, :length => 255, :default => "Test user"
+  property :format, String, :length => 255, :default => "n/a"
   property :algorithm, String, :length => 255
   property :predictedVariables, String, :length => 255
   property :independentVariables, String, :length => 255
@@ -50,8 +50,8 @@ post '/:class/model/:id' do
         prediction.data[compound_uri] = [] unless prediction.data[compound_uri]
         if classification
           tuple = { 
-              :classification => model.mean,
-              :confidence => 1, }
+              "classification" => model.mean,
+              "confidence" => 1, }
           prediction.data[compound_uri] << {model.predictedVariables => tuple}
         else
           prediction.data[compound_uri] << {model.predictedVariables => model.mean}
