@@ -17,7 +17,7 @@ class Model
   property :format, String, :length => 255, :default => "n/a"
   property :algorithm, String, :length => 255
   property :predictedVariables, String, :length => 255
-  property :independentVariables, String, :length => 255
+  property :independentVariables, String, :length => 255, :default => "n/a"
   property :dependentVariables, String, :length => 255
   property :trainingDataset, String, :length => 255
   
@@ -131,7 +131,7 @@ post '/:class/algorithm/?' do
   model.algorithm = url_for("/"+params[:class]+"/algorithm", :full)
   model.trainingDataset = params[:dataset_uri]
   model.predictedVariables = params[:prediction_feature]+"_maj"
-  model.independentVariables = ""
+  #model.independentVariables = ""
   model.dependentVariables = params[:prediction_feature]
   model.classification = classification
   
