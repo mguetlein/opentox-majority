@@ -1,8 +1,6 @@
 require 'rubygems'
-gem 'opentox-ruby-api-wrapper', '= 1.5.7'
+gem 'opentox-ruby-api-wrapper', '= 1.6.2'
 require 'opentox-ruby-api-wrapper'
-
-LOGGER.progname = File.expand_path(__FILE__)
 
 class Model
   include DataMapper::Resource
@@ -139,6 +137,16 @@ post '/:class/algorithm/?' do
   
   response['Content-Type'] = 'text/uri-list'
   model.uri
+end
+
+get '/:class/algorithm' do
+  classification = check_classification(params)
+  
+  response['Content-Type'] = 'application/xml+rdf'
+  owl = OpenTox::Owl.create 'Algorithm', url_for("/"+params[:class]+"/algorithm",:full)
+  owl.set 'title',"Majority Classification"
+  owl.set 'date',Time.now
+  return owl.rdf
 end
 
 get '/:class/model' do
