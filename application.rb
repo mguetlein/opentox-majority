@@ -42,7 +42,7 @@ post '/:class/model/:id' do
   prediction.features << model.predictedVariables
   
   response['Content-Type'] = 'text/uri-list'
-  task_uri = OpenTox::Task.as_task("Predict dataset", url_for("/"+params[:class]+"/model/"+model.id.to_s, :full)) do
+  task_uri = OpenTox::Task.as_task("Predict dataset", url_for("/"+params[:class]+"/model/"+model.id.to_s, :full), params) do
      dataset.compounds.each do |compound_uri|
         prediction.compounds << compound_uri
         prediction.data[compound_uri] = [] unless prediction.data[compound_uri]
