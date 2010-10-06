@@ -1,5 +1,5 @@
 require 'rubygems'
-gem 'opentox-ruby-api-wrapper', '= 1.6.2'
+gem 'opentox-ruby-api-wrapper', '= 1.6.2.1'
 require 'opentox-ruby-api-wrapper'
 
 class Model
@@ -83,9 +83,14 @@ get '/:class/model/:id' do
   accept = "application/rdf+xml" if accept == '*/*' or accept == '' or accept.nil?
   case accept
   when "application/rdf+xml"
+    content_type "application/rdf+xml"
     OpenTox::Model::Generic.to_rdf(model)
   when "application/x-yaml"
+    content_type "application/x-yaml"
     model.to_yaml
+  when /text\/html/
+    content_type "text/html"
+    OpenTox.text_to_html model.to_yaml
   else
     halt 400,"header not supported "+accept.to_s
   end
@@ -141,32 +146,61 @@ end
 
 get '/:class/algorithm' do
   classification = check_classification(params)
-  
-  response['Content-Type'] = 'application/xml+rdf'
   owl = OpenTox::Owl.create 'Algorithm', url_for("/"+params[:class]+"/algorithm",:full)
   owl.set 'title',"Majority Classification"
   owl.set 'date',Time.now
-  return owl.rdf
+  
+  case request.env['HTTP_ACCEPT'].to_s
+  when /text\/html/
+    content_type "text/html"
+    OpenTox.text_to_html owl.rdf
+  else
+    content_type 'application/xml+rdf'
+    owl.rdf
+  end
 end
 
 get '/:class/model' do
   classification = check_classification(params)
-  
-  response['Content-Type'] = 'text/uri-list'
   params[:classification] = params["class"]=="class"
   params.delete("class")
-  return Model.all(params).collect{|m| m.uri}.join("\n")+"\n" 
+  uri_list = Model.all(params).collect{|m| m.uri}.join("\n")+"\n"
+  
+  case request.env['HTTP_ACCEPT'].to_s
+  when /text\/html/
+    content_type "text/html"
+    OpenTox.text_to_html uri_list 
+  else
+    content_type 'text/uri-list'
+    uri_list
+  end
 end
 
 
 get '/:class' do
   check_classification(params)
-  response['Content-Type'] = 'text/uri-list'
-  return [url_for("/"+params[:class]+"/algorithm", :full), url_for("/"+params[:class]+"/model", :full)].join("\n")+"\n" 
+  uri_list = [url_for("/"+params[:class]+"/algorithm", :full), url_for("/"+params[:class]+"/model", :full)].join("\n")+"\n"
+  
+  case request.env['HTTP_ACCEPT'].to_s
+  when /text\/html/
+    content_type "text/html"
+    OpenTox.text_to_html uri_list 
+  else
+    content_type 'text/uri-list'
+    uri_list
+  end 
 end
 
-get '/' do
-  response['Content-Type'] = 'text/uri-list'
-  return [url_for("/class", :full), url_for("/regr", :full)].join("\n")+"\n" 
+get '/?' do
+  uri_list =  [url_for("/class", :full), url_for("/regr", :full)].join("\n")+"\n"
+  
+  case request.env['HTTP_ACCEPT'].to_s
+  when /text\/html/
+    content_type "text/html"
+    OpenTox.text_to_html uri_list 
+  else
+    content_type 'text/uri-list'
+    uri_list
+  end 
 end
   
