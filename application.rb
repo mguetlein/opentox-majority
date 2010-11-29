@@ -2,7 +2,7 @@ require 'rubygems'
 gem 'opentox-ruby-api-wrapper', '= 1.6.2.1'
 require 'opentox-ruby-api-wrapper'
 
-class Model
+class MajorityModel
   include DataMapper::Resource
   property :id, Serial
   property :uri, String, :length => 255
@@ -24,13 +24,13 @@ class Model
   end
 end
 
-DataMapper.auto_upgrade!
+MajorityModel.auto_upgrade!
 
 post '/:class/model/:id' do
   
   classification = check_classification(params)
   
-  model = Model.get(params[:id])
+  model = MajorityModel.get(params[:id])
   halt 404, "Model #{params[:id]} not found." unless model
   
   halt 404, "No dataset_uri parameter." unless params[:dataset_uri]
@@ -42,7 +42,8 @@ post '/:class/model/:id' do
   prediction.features << model.predictedVariables
   
   response['Content-Type'] = 'text/uri-list'
-  task_uri = OpenTox::Task.as_task("Predict dataset", url_for("/"+params[:class]+"/model/"+model.id.to_s, :full), params) do
+  task_uri = OpenTox::Task.as_task("Predict dataset", url_for("/"+params[:class]+"/model/"+model.id.to_s, :full), params) do |task|
+     i = 0
      dataset.compounds.each do |compound_uri|
         prediction.compounds << compound_uri
         prediction.data[compound_uri] = [] unless prediction.data[compound_uri]
@@ -54,6 +55,8 @@ post '/:class/model/:id' do
         else
           prediction.data[compound_uri] << {model.predictedVariables => model.mean}
         end
+        i += 1
+        task.progress( i / dataset.compounds.size.to_f * 100 )
      end
   #   puts "done"
      prediction.save.chomp
@@ -76,7 +79,7 @@ get '/:class/model/:id' do
   
   classification = check_classification(params)
   
-  model = Model.first(:id => params[:id], :classification => classification)
+  model = MajorityModel.first(:id => params[:id], :classification => classification)
   halt 404, "Model #{params[:id]} not found." unless model
   
   accept = request.env['HTTP_ACCEPT']
@@ -127,7 +130,7 @@ post '/:class/algorithm/?' do
   
   LOGGER.debug "Creating Majority Model, mean is: "+max_val.to_s
   
-  model = Model.new
+  model = MajorityModel.new
   model.save # needed to create id
   model.uri = url_for("/"+params[:class]+"/model/"+model.id.to_s, :full)
   model.mean = max_val
@@ -164,7 +167,7 @@ get '/:class/model' do
   classification = check_classification(params)
   params[:classification] = params["class"]=="class"
   params.delete("class")
-  uri_list = Model.all(params).collect{|m| m.uri}.join("\n")+"\n"
+  uri_list = MajorityModel.all(params).collect{|m| m.uri}.join("\n")+"\n"
   
   case request.env['HTTP_ACCEPT'].to_s
   when /text\/html/
