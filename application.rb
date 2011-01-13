@@ -1,6 +1,6 @@
 require 'rubygems'
-gem 'opentox-ruby-api-wrapper', '= 1.6.2.1'
-require 'opentox-ruby-api-wrapper'
+gem "opentox-ruby", "~> 0"
+require 'opentox-ruby'
 
 class MajorityModel
   include DataMapper::Resource
@@ -9,8 +9,8 @@ class MajorityModel
   property :created_at, DateTime
   property :classification, Boolean
   
-  property :title, String, :length => 255, :default => "Majority Model"
-  property :mean, String, :length => 255
+  property :title, String, :length => 255, :required => true #:default => "Majority Model"
+  property :mean, Object
   property :creator, String, :length => 255, :default => "Test user"
   property :format, String, :length => 255, :default => "n/a"
   property :algorithm, String, :length => 255
@@ -18,6 +18,13 @@ class MajorityModel
   property :independentVariables, String, :length => 255, :default => "n/a"
   property :dependentVariables, String, :length => 255
   property :trainingDataset, String, :length => 255
+  
+  def metadata
+    { DC.title => self.title,
+      DC.creator => self.creator,
+      OT.dependentVariables => self.dependentVariables,
+      OT.predictedVariables => self.predictedVariables}
+  end
   
   def date
     return @created_at.to_s
@@ -36,32 +43,26 @@ post '/:class/model/:id' do
   halt 404, "No dataset_uri parameter." unless params[:dataset_uri]
   LOGGER.debug "Dataset: " + params[:dataset_uri].to_s
   dataset = OpenTox::Dataset.find(params[:dataset_uri])
+  dataset.load_all
   
-  prediction = OpenTox::Dataset.new 
-  prediction.creator = model.uri
-  prediction.features << model.predictedVariables
+  prediction = OpenTox::Dataset.create
+  prediction.add_metadata({DC.creator => model.uri})#DC.title => "any_title"
+  prediction.add_feature( model.predictedVariables )
   
   response['Content-Type'] = 'text/uri-list'
-  task_uri = OpenTox::Task.as_task("Predict dataset", url_for("/"+params[:class]+"/model/"+model.id.to_s, :full), params) do |task|
+  task_uri = OpenTox::Task.create("Predict dataset", url_for("/"+params[:class]+"/model/"+model.id.to_s, :full)) do |task| #, params
      i = 0
      dataset.compounds.each do |compound_uri|
-        prediction.compounds << compound_uri
-        prediction.data[compound_uri] = [] unless prediction.data[compound_uri]
-        if classification
-          tuple = { 
-              "classification" => model.mean,
-              "confidence" => 1, }
-          prediction.data[compound_uri] << {model.predictedVariables => tuple}
-        else
-          prediction.data[compound_uri] << {model.predictedVariables => model.mean}
-        end
+        #LOGGER.debug("predict compound "+compound_uri)
+#       "confidence" => 1, }
+        prediction.add(compound_uri, model.predictedVariables, model.mean ) 
         i += 1
-        task.progress( i / dataset.compounds.size.to_f * 100 )
+        #task.progress( i / dataset.compounds.size.to_f * 100 )
      end
-  #   puts "done"
-     prediction.save.chomp
+     prediction.save
+     prediction.uri
   end
-  halt 202,task_uri
+  halt 202,task_uri.uri
 end
 
 def check_classification(params)
@@ -85,9 +86,12 @@ get '/:class/model/:id' do
   accept = request.env['HTTP_ACCEPT']
   accept = "application/rdf+xml" if accept == '*/*' or accept == '' or accept.nil?
   case accept
-  when "application/rdf+xml"
-    content_type "application/rdf+xml"
-    OpenTox::Model::Generic.to_rdf(model)
+  when /application\/rdf\+xml/
+    
+    s = OpenTox::Serializer::Owl.new
+    s.add_model(model.uri,model.metadata)
+    response['Content-Type'] = 'application/rdf+xml'
+    s.to_rdfxml
   when "application/x-yaml"
     content_type "application/x-yaml"
     model.to_yaml
@@ -95,19 +99,19 @@ get '/:class/model/:id' do
     content_type "text/html"
     OpenTox.text_to_html model.to_yaml
   else
-    halt 400,"header not supported "+accept.to_s
+    halt 400,"header not supported '"+accept.to_s+"'"
   end
 end
 
 post '/:class/algorithm/?' do
   
   classification = check_classification(params)
-  
   halt 404, "No dataset_uri parameter." unless params[:dataset_uri]
   halt 404, "No prediction_feature parameter." unless params[:prediction_feature]
   
 	LOGGER.debug "Dataset: " + params[:dataset_uri].to_s
   dataset = OpenTox::Dataset.find(params[:dataset_uri])
+  dataset.load_all
   halt 404, "No feature #{params[:prediction_feature]} in dataset #{params[:dataset_uri]}. (features: "+
     dataset.features.inspect+")" unless dataset.features and dataset.features.include?(params[:prediction_feature])
   
@@ -116,8 +120,9 @@ post '/:class/algorithm/?' do
   
   vals = {}
   compounds.each do |c|
-    val = dataset.get_value(c,feature)
-    vals[val] = ( vals.has_key?(val) ? vals[val] : 0 ) + 1
+    dataset.data_entries[c][feature].each do |val|
+      vals[val] = ( vals.has_key?(val) ? vals[val] : 0 ) + 1
+    end
   end
   max = -1
   max_val = nil
@@ -128,9 +133,10 @@ post '/:class/algorithm/?' do
     end
   end
   
-  LOGGER.debug "Creating Majority Model, mean is: "+max_val.to_s
-  
+  raise "max-val is array "+vals.inspect if max_val.is_a?(Array)
+  LOGGER.debug "Creating Majority Model, mean is: "+max_val.to_s+", class: "+max_val.class.to_s
   model = MajorityModel.new
+  model.title = "Majority Model for "+(classification ? "Classification" : "Regression")
   model.save # needed to create id
   model.uri = url_for("/"+params[:class]+"/model/"+model.id.to_s, :full)
   model.mean = max_val
