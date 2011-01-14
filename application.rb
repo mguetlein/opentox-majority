@@ -57,7 +57,7 @@ post '/:class/model/:id' do
 #       "confidence" => 1, }
         prediction.add(compound_uri, model.predictedVariables, model.mean ) 
         i += 1
-        #task.progress( i / dataset.compounds.size.to_f * 100 )
+        task.progress( i / dataset.compounds.size.to_f * 100 )
      end
      prediction.save
      prediction.uri
