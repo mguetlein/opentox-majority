@@ -5,7 +5,6 @@ require 'opentox-ruby'
 class MajorityModel
   include DataMapper::Resource
   property :id, Serial
-  property :uri, String, :length => 255
   property :created_at, DateTime
   property :classification, Boolean
   
@@ -19,6 +18,16 @@ class MajorityModel
   property :dependentVariables, String, :length => 255
   property :trainingDataset, String, :length => 255
   
+  attr_accessor :subjectid
+  
+  def uri
+    raise if classification==nil
+    raise if id==nil
+    uri = $url_provider.url_for("/"+(classification ? "class" : "regr")+"/model/"+id.to_s, :full)
+    puts "uri is "+uri.to_s
+    uri
+  end
+  
   def metadata
     { DC.title => self.title,
       DC.creator => self.creator,
@@ -29,6 +38,15 @@ class MajorityModel
   def date
     return @created_at.to_s
   end
+  
+  after :save, :check_policy
+  private
+  def check_policy
+    raise "no uri" unless uri and uri.to_s.size>0
+    puts "save with uri "+uri.to_s
+    raise "no subjectid" unless subjectid
+    OpenTox::Authorization.check_policy(uri, subjectid)
+  end
 end
 
 MajorityModel.auto_upgrade!
@@ -38,6 +56,7 @@ post '/:class/model/:id' do
   classification = check_classification(params)
   
   model = MajorityModel.get(params[:id])
+  model.subjectid = @subjectid
   halt 404, "Model #{params[:id]} not found." unless model
   
   halt 404, "No dataset_uri parameter." unless params[:dataset_uri]
@@ -45,7 +64,7 @@ post '/:class/model/:id' do
   dataset = OpenTox::Dataset.find(params[:dataset_uri])
   dataset.load_all
   
-  prediction = OpenTox::Dataset.create
+  prediction = OpenTox::Dataset.create(CONFIG[:services]["opentox-dataset"],model.subjectid)
   prediction.add_metadata({DC.creator => model.uri})#DC.title => "any_title"
   prediction.add_feature( model.predictedVariables )
   
@@ -59,7 +78,7 @@ post '/:class/model/:id' do
         i += 1
         task.progress( i / dataset.compounds.size.to_f * 100 )
      end
-     prediction.save
+     prediction.save model.subjectid
      prediction.uri
   end
   halt 202,task_uri.uri
@@ -103,6 +122,29 @@ get '/:class/model/:id' do
   end
 end
 
+
+delete '/:class/model/:id' do
+  
+  classification = check_classification(params)
+  LOGGER.debug "deleting majority "+classification.to_s+" model with id "+params[:id].to_s
+  
+  model = MajorityModel.first(:id => params[:id], :classification => classification)
+  halt 404, "Model #{params[:id]} not found." unless model
+  
+  uri = model.uri
+  model.destroy
+  LOGGER.debug "model deleted"
+  
+  if @subjectid
+    begin
+      res = OpenTox::Authorization.delete_policies_from_uri(model.uri, @subjectid)
+      LOGGER.debug "Deleted model policy: #{res}"
+    rescue
+      LOGGER.warn "Policy delete error for model: #{uri}"
+    end
+  end
+end
+
 post '/:class/algorithm/?' do
   
   classification = check_classification(params)
@@ -136,16 +178,15 @@ post '/:class/algorithm/?' do
   raise "max-val is array "+vals.inspect if max_val.is_a?(Array)
   LOGGER.debug "Creating Majority Model, mean is: "+max_val.to_s+", class: "+max_val.class.to_s
   model = MajorityModel.new
+  model.subjectid = @subjectid
   model.title = "Majority Model for "+(classification ? "Classification" : "Regression")
-  model.save # needed to create id
-  model.uri = url_for("/"+params[:class]+"/model/"+model.id.to_s, :full)
+  model.classification = classification
   model.mean = max_val
   model.algorithm = url_for("/"+params[:class]+"/algorithm", :full)
   model.trainingDataset = params[:dataset_uri]
   model.predictedVariables = params[:prediction_feature]+"_maj"
   #model.independentVariables = ""
   model.dependentVariables = params[:prediction_feature]
-  model.classification = classification
   
   raise "could not save" unless model.save
   
