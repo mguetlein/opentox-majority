@@ -91,7 +91,7 @@ def check_classification(params)
   when "regr"
     return false
   else
-    halt 400,"Neither 'class' nor 'regr'"
+    raise OpenTox::NotFoundError.new "Neither 'class' nor 'regr'"
   end
 end
 
