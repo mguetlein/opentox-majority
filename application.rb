@@ -2,6 +2,8 @@ require 'rubygems'
 gem "opentox-ruby", "~> 0"
 require 'opentox-ruby'
 
+#require "error2_application.rb"
+
 class MajorityModel
   include DataMapper::Resource
   property :id, Serial
@@ -44,7 +46,7 @@ class MajorityModel
   def check_policy
     raise "no uri" unless uri and uri.to_s.size>0
     puts "save with uri "+uri.to_s
-    raise "no subjectid" unless subjectid
+#    raise "no subjectid" unless subjectid
     OpenTox::Authorization.check_policy(uri, subjectid)
   end
 end
@@ -61,8 +63,8 @@ post '/:class/model/:id' do
   
   halt 404, "No dataset_uri parameter." unless params[:dataset_uri]
   LOGGER.debug "Dataset: " + params[:dataset_uri].to_s
-  dataset = OpenTox::Dataset.find(params[:dataset_uri])
-  dataset.load_all
+  dataset = OpenTox::Dataset.find(params[:dataset_uri],@subjectid)
+  dataset.load_all @subjectid
   
   prediction = OpenTox::Dataset.create(CONFIG[:services]["opentox-dataset"],model.subjectid)
   prediction.add_metadata({DC.creator => model.uri})#DC.title => "any_title"
@@ -152,8 +154,8 @@ post '/:class/algorithm/?' do
   halt 404, "No prediction_feature parameter." unless params[:prediction_feature]
   
 	LOGGER.debug "Dataset: " + params[:dataset_uri].to_s
-  dataset = OpenTox::Dataset.find(params[:dataset_uri])
-  dataset.load_all
+  dataset = OpenTox::Dataset.find(params[:dataset_uri],@subjectid)
+  dataset.load_all @subjectid
   halt 404, "No feature #{params[:prediction_feature]} in dataset #{params[:dataset_uri]}. (features: "+
     dataset.features.inspect+")" unless dataset.features and dataset.features.include?(params[:prediction_feature])
   
