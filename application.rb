@@ -70,7 +70,6 @@ post '/:class/model/:id' do
   prediction.add_metadata({DC.creator => model.uri})#DC.title => "any_title"
   prediction.add_feature( model.predictedVariables )
   
-  response['Content-Type'] = 'text/uri-list'
   task_uri = OpenTox::Task.create("Predict dataset", url_for("/"+params[:class]+"/model/"+model.id.to_s, :full)) do |task| #, params
      i = 0
      dataset.compounds.each do |compound_uri|
@@ -83,7 +82,7 @@ post '/:class/model/:id' do
      prediction.save model.subjectid
      prediction.uri
   end
-  halt 202,task_uri.uri
+  return_task(task)
 end
 
 def check_classification(params)
