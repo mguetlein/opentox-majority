@@ -34,7 +34,8 @@ class MajorityModel
     { DC.title => self.title,
       DC.creator => self.creator,
       OT.dependentVariables => self.dependentVariables,
-      OT.predictedVariables => self.predictedVariables}
+      OT.predictedVariables => self.predictedVariables,
+      OT.algorithm => $url_provider.url_for("/"+(classification ? "class" : "regr")+"/algorithm", :full) }
   end
   
   def date
@@ -70,7 +71,7 @@ post '/:class/model/:id' do
   prediction.add_metadata({DC.creator => model.uri})#DC.title => "any_title"
   prediction.add_feature( model.predictedVariables )
   
-  task_uri = OpenTox::Task.create("Predict dataset", url_for("/"+params[:class]+"/model/"+model.id.to_s, :full)) do |task| #, params
+  task = OpenTox::Task.create("Predict dataset", url_for("/"+params[:class]+"/model/"+model.id.to_s, :full)) do |task| #, params
      i = 0
      dataset.compounds.each do |compound_uri|
         #LOGGER.debug("predict compound "+compound_uri)
@@ -196,18 +197,29 @@ post '/:class/algorithm/?' do
 end
 
 get '/:class/algorithm' do
+  
   classification = check_classification(params)
-  owl = OpenTox::Owl.create 'Algorithm', url_for("/"+params[:class]+"/algorithm",:full)
-  owl.set 'title',"Majority Classification"
-  owl.set 'date',Time.now
+  metadata = {
+   OT.title => "Majority "+(classification ? "Classification" : "Regression") }
+  uri = url_for("/"+params[:class]+"/algorithm",:full)
+  
+  s = OpenTox::Serializer::Owl.new
+  s.add_algorithm(uri, metadata)
+  response['Content-Type'] = 'application/rdf+xml'
+  rdf = s.to_rdfxml
+    
+#  classification = check_classification(params)
+#  owl = OpenTox::Owl.create 'Algorithm', url_for("/"+params[:class]+"/algorithm",:full)
+#  owl.set 'title',"Majority Classification"
+#  owl.set 'date',Time.now
   
   case request.env['HTTP_ACCEPT'].to_s
   when /text\/html/
     content_type "text/html"
-    OpenTox.text_to_html owl.rdf
+    OpenTox.text_to_html rdf
   else
     content_type 'application/xml+rdf'
-    owl.rdf
+    rdf
   end
 end
 
